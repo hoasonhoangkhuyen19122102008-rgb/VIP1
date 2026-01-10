@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Trang web trả lời câu đố với đáp án và hình ảnh minh họa. Nhập mã câu hỏi để xem đáp án." />
+  <meta name="theme-color" content="#ffffff" />
+  <title>Trả Lời Câu Đố - Đáp Án Nhanh Chóng</title>
+  <style>
+    :root{
+      --bg: #f4f4f4;
+      --card: #fff;
+      --text: #222;
+      --muted: #666;
+      --accent: #007bff;
+      --success: #28a745;
+      --error: #dc3545;
+      --result-bg: #e9ecef;
+    }
+
+    /* Nếu người dùng hệ điều hành để dark, mặc định sẽ áp dụng */
+    @media (prefers-color-scheme: dark){
+      :root{
+        --bg: #222;
+        --card: #333;
+        --text: #f4f4f4;
+        --muted: #bbb;
+        --accent: #66b0ff;
+        --result-bg: #444;
+      }
+    }
+
+    /* Khi JS đặt attribute data-dark="true" trên <html>, override các biến để kích hoạt dark mode */
+    html[data-dark="true"] {
+      --bg: #121212;
+      --card: #1f1f1f;
+      --text: #f4f4f4;
+      --muted: #bdbdbd;
+      --accent: #66b0ff;
+      --success: #2cd65a;
+      --error: #ff6b6b;
+      --result-bg: #2b2b2b;
+    }
+
+    body{
+      font-family: Arial, Helvetica, sans-serif;
+      margin:0;
+      padding:20px;
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:var(--bg);
+      color:var(--text);
+      transition:background-color .25s linear,color .25s linear;
+    }
+    .container{
+      width:100%;
+      max-width:700px;
+      background:var(--card);
+      padding:28px;
+      border-radius:10px;
+      box-shadow:0 6px 18px rgba(0,0,0,.08);
+      position:relative;
+    }
+    h1{ text-align:center; margin:0 0 14px; }
+    form{ display:flex; flex-direction:column; gap:8px; }
+    label{ font-weight:600; color:var(--text); }
+    input[type="text"]{
+      padding:10px 12px;
+      font-size:16px;
+      border:1px solid #cfcfcf;
+      border-radius:6px;
+      background:transparent;
+      color:var(--text);
+    }
+    input[type="text"]::placeholder{ color:var(--muted); }
+    .buttons{ display:flex; gap:8px; margin-top:6px; }
+    button{
+      padding:10px 14px;
+      border-radius:6px;
+      border:0;
+      background:var(--accent);
+      color:#fff;
+      cursor:pointer;
+      font-size:15px;
+    }
+    button.reset{ background:var(--error); }
+    button:focus{ outline:3px solid rgba(0,123,255,.2); outline-offset:2px; }
+    #result{
+      margin-top:18px;
+      padding:14px;
+      background:var(--result-bg);
+      border-radius:8px;
+      display:none;
+      opacity:0;
+      transition:opacity .25s ease;
+      text-align:center;
+    }
+    #result.show{ display:block; opacity:1; }
+    #result h2{ margin:0 0 8px; color:var(--success); font-size:20px; }
+    #answer{ font-size:22px; margin:0 0 8px; color:var(--text); }
+    #image{ max-width:80%; height:auto; border-radius:6px; display:block; margin:0 auto; border:1px solid rgba(0,0,0,.06); }
+    .error{ color:var(--error); font-weight:700; display:none; text-align:center; }
+    .error.show{ display:block; }
+    #darkModeToggle{
+      position:absolute;
+      top:16px;
+      right:16px;
+      background:#ffc107;
+      color:#222;
+      border:none;
+      padding:8px 10px;
+      border-radius:6px;
+      cursor:pointer;
+      font-size:13px;
+    }
+    [data-dark="true"] #darkModeToggle{ background:#6c757d; color:#fff; }
+    @media (max-width:600px){
+      .container{ padding:18px; }
+      #image{ max-width:100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="app" aria-live="polite">
+    <button id="darkModeToggle" aria-pressed="false" title="Chuyển chế độ tối (phím tắt: D)">Chuyển Chế Độ</button>
+    <h1>Đuổi Hình Bắt Chữ</h1>
+
+    <form id="questionForm" aria-label="Form nhập câu hỏi">
+      <label for="question">Nhập câu hỏi (ví dụ: C5):</label>
+      <input type="text" id="question" placeholder="Nhập mã câu hỏi..." inputmode="latin" autocomplete="off" aria-required="true" />
+      <div class="buttons">
+        <button type="submit">Trả Lời</button>
+        <button type="button" class="reset" id="resetButton">Reset</button>
+      </div>
+    </form>
+
+    <p class="error" id="errorMsg" role="alert" aria-atomic="true">Không tìm thấy đáp án cho câu hỏi này. Vui lòng thử lại!</p>
+
+    <div id="result" role="status" aria-live="polite" aria-atomic="true">
+      <h2>Đáp án:</h2>
+      <p id="answer" tabindex="-1"></p>
+      <img id="image" src="" alt="" loading="lazy" />
+    </div>
+  </div>
+
+  <script>
+    // Dữ liệu câu đố
+    const riddles = {
+      'C5':   { answer: 'CAU CHI', image: 'https://i.ibb.co/1fvZtbhC/Screenshot-2026-01-10-235959.png' },
+      'T3B4': { answer: 'TONG BI THU', image: 'https://i.ibb.co/4wDMVwjs/Screenshot-2026-01-11-000055.png' },
+      'N6':   { answer: 'NANG GIA', image: 'https://i.ibb.co/1f41V9Bh/Screenshot-2026-01-11-000019.png' },
+      '3O3N2':{ answer: 'BAO DIEN TU', image: 'https://i.ibb.co/MkTdg5pB/Screenshot-2026-01-10-235855.png' },
+      '4G3':  { answer: 'TUONG DAI', image: 'https://i.ibb.co/2pVdh1C/Screenshot-2026-01-11-000116.png' },
+      'H3IT4':{ answer: 'HOC LIEN THONG', image: 'https://i.ibb.co/xKXpvX0v/Screenshot-2026-01-11-002623.png' },
+      '3G4':  { answer: 'NANG TINH', image: 'https://i.ibb.co/NGhxNXy/Screenshot-2026-01-11-002645.png' },
+      'H1U4': { answer: 'HAU CUNG', image: 'https://i.ibb.co/n8gSRg6C/Screenshot-2026-01-11-002700.png' },
+      '1A3':  { answer: 'CAU CU', image: 'https://i.ibb.co/Ndqdc0MQ/Screenshot-2026-01-11-002718.png' },
+      '1U4':  { answer: 'QUY CAI', image: 'https://i.ibb.co/zWDkLv3m/Screenshot-2026-01-11-002736.png' }
+    };
+
+    const STORAGE_KEYS = { lastQuestion: 'riddle_lastQuestion', darkMode: 'riddle_darkMode' };
+
+    function normalizeQuestion(q){
+      return String(q || '').trim().toUpperCase().replace(/\s+/g,'');
+    }
+
+    // DOM
+    const form = document.getElementById('questionForm');
+    const input = document.getElementById('question');
+    const result = document.getElementById('result');
+    const answerEl = document.getElementById('answer');
+    const imageEl = document.getElementById('image');
+    const errorMsg = document.getElementById('errorMsg');
+    const resetBtn = document.getElementById('resetButton');
+    const darkToggle = document.getElementById('darkModeToggle');
+
+    // Image error handling
+    imageEl.addEventListener('error', () => {
+      imageEl.style.display = 'none';
+    });
+
+    function showResultForKey(key){
+      const entry = riddles[key];
+      if(!entry) return false;
+      answerEl.textContent = entry.answer;
+      imageEl.src = entry.image || '';
+      imageEl.alt = entry.image ? `Hình ảnh cho ${entry.answer}` : '';
+      imageEl.style.display = entry.image ? 'block' : 'none';
+      errorMsg.classList.remove('show');
+      result.classList.add('show');
+      result.style.display = 'block';
+      answerEl.focus();
+      return true;
+    }
+
+    function hideResultAndError(){
+      result.classList.remove('show');
+      result.style.display = 'none';
+      errorMsg.classList.remove('show');
+    }
+
+    form.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const raw = input.value || '';
+      const key = normalizeQuestion(raw);
+      hideResultAndError();
+
+      if(!key){
+        errorMsg.textContent = 'Vui lòng nhập mã câu hỏi.';
+        errorMsg.classList.add('show');
+        return;
+      }
+
+      if(Object.prototype.hasOwnProperty.call(riddles, key)){
+        showResultForKey(key);
+        localStorage.setItem(STORAGE_KEYS.lastQuestion, key);
+      } else {
+        errorMsg.textContent = 'Không tìm thấy đáp án cho câu hỏi này. Vui lòng thử lại!';
+        errorMsg.classList.add('show');
+      }
+
+      input.value = '';
+    });
+
+    resetBtn.addEventListener('click', () => {
+      input.value = '';
+      hideResultAndError();
+    });
+
+    // Dark mode toggle: set attribute trên <html> (document.documentElement)
+    function applyDarkMode(dark){
+      document.documentElement.setAttribute('data-dark', dark ? 'true' : 'false');
+      darkToggle.setAttribute('aria-pressed', String(!!dark));
+      darkToggle.textContent = dark ? 'Chuyển Chế Độ Sáng' : 'Chuyển Chế Độ Tối';
+      localStorage.setItem(STORAGE_KEYS.darkMode, dark ? 'true' : 'false');
+    }
+
+    darkToggle.addEventListener('click', () => {
+      const isDark = localStorage.getItem(STORAGE_KEYS.darkMode) === 'true';
+      applyDarkMode(!isDark);
+    });
+
+    // keyboard shortcut (phím "d") để toggle dark mode khi không ở input/textarea
+    document.addEventListener('keydown', (ev) => {
+      if(ev.key && ev.key.toLowerCase() === 'd'){
+        const active = document.activeElement;
+        if(active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+        ev.preventDefault();
+        darkToggle.click();
+      }
+    });
+
+    // Load preferences / last question
+    (function init(){
+      const darkPref = localStorage.getItem(STORAGE_KEYS.darkMode);
+      if(darkPref === 'true'){
+        applyDarkMode(true);
+      } else if(darkPref === 'false'){
+        applyDarkMode(false);
+      } else {
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        applyDarkMode(prefersDark);
+      }
+
+      const last = localStorage.getItem(STORAGE_KEYS.lastQuestion);
+      if(last){
+        if(Object.prototype.hasOwnProperty.call(riddles, last)){
+          showResultForKey(last);
+        } else {
+          input.placeholder = `Last: ${last}`;
+        }
+      }
+    })();
+
+    console.log('Riddles loaded:', Object.keys(riddles).length);
+    console.log('Page ready.');
+  </script>
+</body>
+</html>
